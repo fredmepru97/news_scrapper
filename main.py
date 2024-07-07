@@ -220,7 +220,7 @@ else:
 
     for cluster_id, titles in sorted_clusters:
         # Define cluster name and sample keywords
-        cluster_name = f"<a href='/page_clusters?cluster_id={cluster_id}' target=_top>Cluster {cluster_id}</a>"
+        cluster_name = f"<a href='/cluster?cluster_id={cluster_id}' target=_top>Cluster {cluster_id}</a>"
         cluster_keywords_list = ", ".join(cluster_keywords[cluster_id])
         cluster_keywords_str = f"Keywords: {cluster_keywords_list}"
         num_articles = len(titles)
