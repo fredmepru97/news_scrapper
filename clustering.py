@@ -77,3 +77,25 @@ def cluster_articles(titles, n_clusters=5):
         clusters[label].append(titles[idx])
 
     return clusters
+
+def clusters_2():
+    logging.info("Loading articles from cache")
+    with open(CACHE_FILE, 'r') as f:
+        articles = json.load(f)
+    
+    news_df = pd.DataFrame(articles.values())
+    helper = Helper()
+    news_df = helper.clean_dataframe(news_df)
+    tfidf_array = compute_tfidf(news_df)
+    
+    clustering_model = AgglomerativeClustering(n_clusters=None, distance_threshold=1.5)
+    news_df['cluster_id'] = clustering_model.fit_predict(tfidf_array)
+    
+    clusters = {str(cluster_id): news_df[news_df.cluster_id == cluster_id].to_dict(orient='records')
+                for cluster_id in np.unique(news_df.cluster_id)}
+    
+    featured_clusters = find_featured_clusters(clusters)
+    
+    logging.info("Saving clusters to cache")
+    with open(CACHE_FILE, 'w') as f:
+        json.dump(articles, f, indent=4)

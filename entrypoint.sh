@@ -7,4 +7,4 @@ echo "Running the clustering script..."
 python clustering.py
 
 echo "Starting the Streamlit app..."
-exec streamlit run main.py "$@"
+exec streamlit run Dashboard.py "$@"

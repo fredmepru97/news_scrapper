@@ -4,7 +4,8 @@ import altair as alt
 import json
 import toml
 import os
-from clustering import cluster_articles
+from clustering import compute_tfidf, AgglomerativeClustering, Helper
+import numpy as np
 from collections import Counter
 
 # PAGE FORMAT
@@ -31,11 +32,16 @@ st.markdown(f"""
     </style>
     """, unsafe_allow_html=True)
 
+# Sidebar logo
+st.sidebar.image('app/Cat.png', use_column_width=True)
+
 # Header for the Streamlit app
 st.markdown(f'<h1 class="primary">Giki News for People in a Hurry!</h1>', unsafe_allow_html=True)
 
-# Load the JSON file with article data
+
 file_path = 'article_cache.json'
+LOGO_PATH = 'app/Cat.png'
+KEYWORD_LOGO_PATH = 'app/logo.png'
 
 @st.cache_data
 def load_data():
@@ -136,7 +142,7 @@ keyword_counts = df_keywords['Keyword'].value_counts().reset_index()
 keyword_counts.columns = ['Keyword', 'Count']
 
 # Filter keywords that appear at least 8 times
-filtered_keyword_counts = keyword_counts[keyword_counts['Count'] >= 1]
+filtered_keyword_counts = keyword_counts[keyword_counts['Count'] >= 3]
 
 # Create a sorting function to sort numbers first, then words
 def sort_keywords(keyword):
@@ -166,25 +172,19 @@ bubble_chart = alt.Chart(filtered_keyword_counts).mark_circle().encode(
 if filtered_total_articles == 0:
     st.write("No articles found")
 else:
-    if 0 < filtered_total_articles <= 10:
-        num_clusters = 3
-    elif 10 < filtered_total_articles <= 50:
-        num_clusters = 5
-    elif 50 < filtered_total_articles <= 100:
-        num_clusters = 7
-    else:
-        num_clusters = 12
+    # Prepare data for clustering
+    helper = Helper()
+    news_df = pd.DataFrame(filtered_articles)
+    news_df['clean_body'] = news_df['body']  # Assuming that body is already cleaned
 
-    # Cluster articles based on filtered titles
-    clusters = cluster_articles(filtered_titles, num_clusters)
+    tfidf_array = compute_tfidf(news_df)
+    
+    # Cluster articles using AgglomerativeClustering with distance threshold
+    clustering_model = AgglomerativeClustering(n_clusters=None, distance_threshold=1.5)
+    news_df['cluster_id'] = clustering_model.fit_predict(tfidf_array)
 
-    # Calculate most frequent keywords for each cluster
-    cluster_keywords = {}
-    for cluster_id, titles in clusters.items():
-        cluster_articles = [article for article in filtered_articles if article['title'] in titles]
-        keywords = [keyword for article in cluster_articles for keyword in article.get('keywords', [])]
-        most_common_keywords = [keyword for keyword, _ in Counter(keywords).most_common(3)]
-        cluster_keywords[cluster_id] = most_common_keywords
+    clusters = {str(cluster_id): news_df[news_df.cluster_id == cluster_id].to_dict(orient='records')
+                for cluster_id in np.unique(news_df.cluster_id)}
 
     # Store filtered_articles and clusters in session state for access on another page
     st.session_state.filtered_articles = filtered_articles
@@ -217,17 +217,22 @@ else:
     col_index = 0
 
     # Sort clusters by cluster number
-    sorted_clusters = sorted(clusters.items())
+    sorted_clusters = sorted(clusters.items(), key=lambda x: int(x[0]))
 
     for cluster_id, titles in sorted_clusters:
         # Define cluster name and sample keywords
-        cluster_name = f"<a href='/page_clusters?cluster_id={cluster_id}' target=_top>Cluster {cluster_id + 1}</a>"
-        cluster_keywords_list = ", ".join(cluster_keywords[cluster_id])
-        cluster_keywords_str = f"Keywords: {cluster_keywords_list}"
+        cluster_name = f"<a href='/cluster?cluster_id={cluster_id}' target=_top>Cluster {int(cluster_id) + 1}</a>"
+        
+        # Calculate top 5 most frequent keywords in the cluster
+        all_keywords = [keyword for article in titles for keyword in article.get('keywords', [])]
+        keyword_counts = Counter(all_keywords).most_common(10)
+        top_keywords = [keyword for keyword, count in keyword_counts]
+        cluster_keywords_str = f"Keywords: {', '.join(top_keywords)}"
+        
         num_articles = len(titles)
         
         # Representative articles (sample titles)
-        representative_articles = "Representative Articles:\n" + "\n".join([f"- \"{title}\"" for title in titles[:2]])
+        representative_articles = "Representative Articles:\n" + "\n".join([f"- \"{article['title']}\"" for article in titles[:2]])
         
         # Create markdown content
         cluster_markdown = f"""
